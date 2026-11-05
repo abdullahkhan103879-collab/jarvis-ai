@@ -1,0 +1,255 @@
+<!DOCTYPE html>  <html lang="hi">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport"  
+ content="width=device-width, initial-scale=1.0">  <title>JARVIS AI</title>  <style>  
+* { box-sizing: border-box; }  
+  
+body {  
+  margin: 0;  
+  background: #080e1b;  
+  color: white;  
+  font-family: Arial, sans-serif;  
+}  
+  
+header {  
+  padding: 20px;  
+  text-align: center;  
+  color: #55dfff;  
+  font-size: 25px;  
+  font-weight: bold;  
+}  
+  
+.orb {  
+  width: 125px;  
+  height: 125px;  
+  margin: 20px auto;  
+  border-radius: 50%;  
+  background: radial-gradient(  
+    circle, #6df5ff, #1262a8, #07152c  
+  );  
+  box-shadow: 0 0 35px #168aff;  
+}  
+  
+#status {  
+  text-align: center;  
+  color: #83dfff;  
+  margin: 12px;  
+}  
+  
+#chat {  
+  height: 45vh;  
+  overflow-y: auto;  
+  padding: 15px;  
+}  
+  
+.message {  
+  padding: 12px;  
+  margin: 10px 0;  
+  border-radius: 12px;  
+  line-height: 1.5;  
+  white-space: pre-wrap;  
+}  
+  
+.user {  
+  background: #123e68;  
+  margin-left: 35px;  
+}  
+  
+.ai {  
+  background: #17263c;  
+  margin-right: 35px;  
+}  
+  
+.controls {  
+  padding: 12px;  
+  display: flex;  
+  gap: 8px;  
+}  
+  
+input, select {  
+  background: #17263c;  
+  color: white;  
+  border: 1px solid #36506b;  
+  border-radius: 10px;  
+  padding: 13px;  
+}  
+  
+input {  
+  flex: 1;  
+  min-width: 0;  
+}  
+  
+button {  
+  background: #087fc4;  
+  color: white;  
+  border: 0;  
+  border-radius: 10px;  
+  padding: 12px;  
+  font-size: 15px;  
+}  
+  
+button:disabled {  
+  opacity: .5;  
+}  
+  
+.bottom {  
+  padding: 10px;  
+  display: flex;  
+  justify-content: center;  
+  gap: 10px;  
+}  
+</style>  </head>  <body>  <header>✦ JARVIS AI ✦</header>  <div class="orb"></div>  <div id="status">Your AI Assistant is ready</div>  <div id="chat"></div>  <div class="controls">  
+  <input id="message"  
+    placeholder="अपना सवाल लिखें..." />  
+  <button id="send">Send</button>  
+</div>  <div class="bottom">  
+  <select id="lang">  
+    <option value="hi-IN">हिंदी</option>  
+    <option value="en-US">English</option>  
+  </select>  
+  <button id="mic">🎙️ Speak</button>  
+  <button id="stop">Stop Voice</button>  
+</div>  <script>  
+const chat = document.getElementById("chat");  
+const message = document.getElementById("message");  
+const statusText = document.getElementById("status");  
+const send = document.getElementById("send");  
+const mic = document.getElementById("mic");  
+const stop = document.getElementById("stop");  
+const lang = document.getElementById("lang");  
+  
+let history = [];  
+let busy = false;  
+  
+function addMessage(text, type) {  
+  const div = document.createElement("div");  
+  div.className = "message " + type;  
+  div.textContent = text;  
+  chat.appendChild(div);  
+  chat.scrollTop = chat.scrollHeight;  
+}  
+  
+function speak(text) {  
+  if (!("speechSynthesis" in window)) return;  
+  
+  speechSynthesis.cancel();  
+  
+  const voice = new SpeechSynthesisUtterance(text);  
+  
+  voice.lang = /[\u0900-\u097F]/.test(text)  
+    ? "hi-IN" : "en-US";  
+  
+  speechSynthesis.speak(voice);  
+}  
+  
+async function sendMessage() {  
+  const text = message.value.trim();  
+  
+  if (!text || busy) return;  
+  
+  busy = true;  
+  send.disabled = true;  
+  
+  message.value = "";  
+  addMessage(text, "user");  
+  
+  history.push({  
+    role: "user",  
+    content: text  
+  });  
+  
+  statusText.textContent = "JARVIS is thinking...";  
+  
+  try {  
+    const response = await fetch("/api/chat", {  
+      method: "POST",  
+      headers: {  
+        "Content-Type": "application/json"  
+      },  
+      body: JSON.stringify({  
+        messages: history.slice(-12)  
+      })  
+    });  
+  
+    const data = await response.json();  
+  
+    if (!response.ok) {  
+      throw new Error(data.error || "Request failed");  
+    }  
+  
+    addMessage(data.reply, "ai");  
+  
+    history.push({  
+      role: "assistant",  
+      content: data.reply  
+    });  
+  
+    history = history.slice(-12);  
+  
+    speak(data.reply);  
+  
+    statusText.textContent = "JARVIS is ready";  
+  
+  } catch (error) {  
+    addMessage(error.message, "ai");  
+    history.pop();  
+    statusText.textContent = "Connection error";  
+  
+  } finally {  
+    busy = false;  
+    send.disabled = false;  
+  }  
+}  
+  
+send.addEventListener("click", sendMessage);  
+  
+message.addEventListener("keydown", (e) => {  
+  if (e.key === "Enter") sendMessage();  
+});  
+  
+const SpeechRecognition =  
+  window.SpeechRecognition ||  
+  window.webkitSpeechRecognition;  
+  
+mic.addEventListener("click", () => {  
+  if (!SpeechRecognition) {  
+    statusText.textContent =  
+      "Voice input is not supported in this browser.";  
+    return;  
+  }  
+  
+  const recognition = new SpeechRecognition();  
+  
+  recognition.lang = lang.value;  
+  recognition.continuous = false;  
+  recognition.interimResults = false;  
+  
+  recognition.onstart = () => {  
+    statusText.textContent = "Listening...";  
+  };  
+  
+  recognition.onresult = (event) => {  
+    message.value =  
+      event.results[0][0].transcript;  
+    statusText.textContent = "Voice captured";  
+  };  
+  
+  recognition.onerror = () => {  
+    statusText.textContent = "Microphone error";  
+  };  
+  
+  recognition.onend = () => {  
+    mic.disabled = false;  
+  };  
+  
+  mic.disabled = true;  
+  recognition.start();  
+});  
+  
+stop.addEventListener("click", () => {  
+  speechSynthesis.cancel();  
+  statusText.textContent = "Voice stopped";  
+});  
+</script>  </body>  
+</html>  
